@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="it-IT">
+
+<head>
+    <title>Seguimi</title>
+    <link rel="stylesheet" type="text/css" href="./ext/w3.css" />
+    <link rel="icon" type="image/png" href="/favicon.png"/>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.9.0/css/all.min.css">
+    <script src="./ext/moment.js"></script>
+</head>
+
+<body class=" w3-light-grey">
+    <nav class="w3-sidebar w3-bar-block w3-card w3-top w3-xxxlarge w3-animate-left" style="display:none;z-index:2;width:100%;min-width:300px" id="mySidebar">
+        <label class="w3-bar-item">Server</label>
+        <input id="urlAjax" type="url" class="w3-xlarge" style="width:100%" value="http://www.bacigalupo.it/cercariccardo/track.php">
+
+        <label class="w3-bar-item">Frequenza rilevazione</label>
+        <center> <input id="elapsedTimeGet" class="w3-text-right" name="elapsedTimeGet" type="number" /> </center>
+
+        <label class="w3-bar-item">Frequenza di invio</label>
+        <center> <input id="elapsedTimeSend" class="w3-text-right" name="elapsedTimeSend" type="number" /></center>
+        <hr>
+        <div class="w3-row w3-bar-item">
+            <div class="w3-half w3-button w3-green" onclick="saveAndClosePref()">Save and close</div>
+            <div class="w3-half w3-button w3-red" onclick="closePref()">Close</div>
+        </div>
+    </nav>
+
+    <!-- Top menu -->
+    <div class="w3-top">
+        <div class="w3-white w3-xxxlarge" style="max-width:1200px;margin:auto">
+            <div class="w3-button w3-padding-16 w3-left" onclick="openPref()" id="prefButton"><i class="fa fa-cog"></i></div>
+            <div class="w3-center w3-padding-16">Seguimi</div>
+        </div>
+    </div>
+
+    <div class="w3-main w3-content w3-padding w3-xxxlarge" style="max-width:1200px;margin-top:100px;height: 100%">
+        <div class="w3-row w3-card w3-blue-gray">
+            <div class="w3-col s3 w3-padding"> Cache <span class="w3-badge w3-xlarge" id="cacheNumber">0</span></div>
+            <div class="w3-col s3 w3-padding"> Sent <span class="w3-badge w3-xlarge" id="sentNumber">0</span></div>
+            <div class="w3-col s6 w3-padding"> Status
+                <span class="w3-text-orange" id="gpsStatus"><i class="fa fa-dragon"></i></span><sub> GPS</sub>
+                <span class="w3-text-orange" id="serverStatus"><i class="fa fa-spider"></i></span><sub> Server</sub>
+            </div>
+        </div>
+        <div class="w3-row w3-card w3-gray w3-padding">
+            <h2> Current position </h2>
+            <div class="w3-container w3-code w3-xxlarge" id="position"></div>
+        </div>
+    </div>
+
+    <div class="w3-bottom w3-teal w3-center">
+        <button class="w3-bar-item w3-block w3-button w3-green w3-xxxlarge" onclick="logging()" id="logging">START</button>
+    </div>
+    <div id="loadData" class="w3-modal">
+        <div class="w3-modal-content">
+            <header class="w3-container w3-teal w3-center">
+                <h2>Loading DATA</h2>
+            </header>
+            <div class="w3-container">
+                <p style="text-align:center"><br><br><br><i class="w3-jumbo w3-spin fa fa-sync" onclick="document.getElementById('loadData').style.display='none'"></i><br><br>&nbsp;</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        var myApp = {};
+        myApp.watchID;
+
+        // initialize variable
+        myApp.geoLoc = navigator.geolocation;
+        myApp.loggingReport = document.getElementById("position");
+        myApp.loggingButton = document.getElementById("logging");
+        myApp.prefButton = document.getElementById("prefButton");
+        myApp.sideBar = document.getElementById("mySidebar");
+        myApp.urlAjax = document.getElementById("urlAjax");
+        myApp.elapsedTimeGet = document.getElementById("elapsedTimeGet");
+        myApp.elapsedTimeSend = document.getElementById("elapsedTimeSend");
+        myApp.cacheNumber = document.getElementById("cacheNumber");
+        myApp.sentNumber = document.getElementById("sentNumber");
+        myApp.gpsStatus = document.getElementById("gpsStatus");
+        myApp.serverStatus = document.getElementById("serverStatus");
+        myApp.loadData = document.getElementById('loadData');
+
+
+        // default value
+        myApp.options = {
+            timeout: 6000,
+            maximumAge: 5000,
+            enableHighAccuracy: true
+        };
+        myApp.sentNumber.value = 0;
+        myApp.urlAjax.value = encodeURI("http://www.bacigalupo.it/cercariccardo/track.php");
+        myApp.elapsedTimeGet.value = 10;
+        myApp.elapsedTimeSend.value = 10;
+        myApp.allPosition = new Array();
+
+
+        function getAjax(theUrl, data, callBackFunction) {
+            myApp.loadData.style.display = 'block';
+            var xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    if (this.status == 200) {
+                        try {
+                            myApp.AJAXObj = JSON.parse(this.responseText);
+                            if (myApp.AJAXObj.result === "OK") {
+                                setStatus(myApp.serverStatus, "w3-text-green");
+                                window[callBackFunction]();
+                            } else {
+                                myApp.loggingReport.innerHTML = "ERRORE procedurale di comunicazione con il server:<b><br>  " + myApp.AJAXObj.description + "</b>";
+                                logging();
+                                setStatus(myApp.serverStatus, "w3-text-red");
+                            }
+                        } catch (e) {
+                            myApp.loggingReport.innerHTML = "ERRORE Json Validation di comunicazione con il server:<b><br>" + e.name + ": " + e.message + "</b>";
+                            logging();
+                            setStatus(myApp.serverStatus, "w3-text-red");
+                        }
+
+                    } else {
+                        myApp.loggingReport.innerHTML = "ERRORE Architettura  di comunicazione con il server:<b><br>" + formatErrorMessage(this) + "</b>";
+                        logging();
+                        setStatus(myApp.serverStatus, "w3-text-red");
+                    }
+                    myApp.loadData.style.display = 'none';
+                }
+            };
+
+            xhttp.open("GET", theUrl, true);
+            xhttp.send("");
+
+        }
+
+
+        function setPref() {
+            setCookie("urlAjax", encodeURI(myApp.urlAjax.value), "");
+            setCookie("elapsedTimeGet", myApp.elapsedTimeGet.value, "");
+            setCookie("elapsedTimeSend", myApp.elapsedTimeSend.value, "");
+        }
+
+        function getPref() {
+            if (checkCookie("urlAjax")) myApp.urlAjax.value = decodeURI(getCookie("urlAjax"));
+            if (checkCookie("elapsedTimeGet")) myApp.elapsedTimeGet.value = getCookie("elapsedTimeGet");
+            if (checkCookie("elapsedTimeGet")) myApp.elapsedTimeSend.value = getCookie("elapsedTimeSend");
+        }
+
+        function mm() {
+            alert(1);
+        }
+
+        function logging() {
+            if (myApp.loggingButton.innerHTML === "STOP") {
+                myApp.loggingButton.innerHTML = "START";
+                myApp.geoLoc.clearWatch(myApp.watchID);
+                window.clearInterval(myApp.timerVarSend);
+                window.clearInterval(myApp.timerVarGet);
+
+                setStatus(myApp.gpsStatus, "w3-text-orange");
+                setStatus(myApp.serverStatus, "w3-text-orange");
+                // myApp.loggingReport.innerHTML = "&nbsp;";
+            } else {
+                myApp.loggingButton.innerHTML = "STOP";
+
+                myApp.timerVarSend = setInterval(function() {
+
+                    myApp.sentNumber.value += myApp.allPosition.length;
+                    myApp.sentNumber.innerHTML = myApp.sentNumber.value;
+                    myApp.allPosition = new Array();
+                    myApp.cacheNumber.innerHTML = myApp.allPosition.length;
+
+                    getAjax(myApp.urlAjax.value, "", mm);
+                    // setStatus(myApp.serverStatus, "w3-text-green");
+
+                }, (myApp.elapsedTimeSend.value * 1000));
+
+                myApp.timerVarGet = setInterval(function() {
+                    if (myApp.currentPosition !== null) {
+                        myApp.allPosition.push(myApp.currentPosition);
+                        myApp.currentPosition = null;
+
+                        myApp.cacheNumber.innerHTML = myApp.allPosition.length;
+                        // setStatus("gpsIcon", "On");
+                    }
+                }, (myApp.elapsedTimeGet.value * 1000))
+
+
+                if (myApp.geoLoc) {
+                    myApp.watchID = myApp.geoLoc.watchPosition(showLocation, errorHandler, myApp.options);
+                } else {
+                    myApp.loggingReport.innerHTML = "Geolocation is not supported by this browser.";
+                }
+            }
+            myApp.loggingButton.classList.toggle("w3-red");
+            myApp.prefButton.classList.toggle("w3-disabled");
+        }
+
+        function showLocation(position) {
+            var dt = new Date();
+            var newElem = {};
+            newElem.nomeFile = dt.getFullYear() + "\\" + dt.getFullYear() + (dt.getMonth() + 1) + dt.getDate() + ".tab";
+            newElem.lat = position.coords.latitude;
+            newElem.lon = position.coords.longitude;
+            newElem.vel = ((position.coords.speed == null) || (isNaN(position.coords.speed))) ? "" : position.coords.speed * 3.6;
+            newElem.alt = ((position.coords.altitude == null) || (isNaN(position.coords.altitude))) ? "" : position.coords.altitude;
+            newElem.data = moment().format('YYYY/MM/DD');
+            newElem.ora = moment().format('HH:mm:ss');
+            myApp.currentPosition = newElem;
+            setStatus(myApp.gpsStatus, "w3-text-green");
+
+            myApp.loggingReport.innerHTML = 'Latitude : ' + newElem.lat + '<br/>' +
+                'Longitude: ' + newElem.lon + '<br/>' +
+                'Altitude : ' + newElem.alt + '<br/>' +
+                'Speed    : ' + newElem.vel + '<br/>' +
+                'Date     : ' + newElem.data + '<br/>' +
+                'Hour     : ' + newElem.ora + '<br/>';
+        }
+
+        function setStatus(obj, className) {
+            if (!obj.classList.contains(className)) {
+                obj.classList.remove("w3-text-orange");
+                obj.classList.remove("w3-text-green");
+                obj.classList.remove("w3-text-red");
+                obj.classList.add(className);
+            }
+        }
+
+        function errorHandler(error) {
+
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    myApp.loggingReport.innerHTML = "User denied the request for Geolocation."
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    myApp.loggingReport.innerHTML = "Location information is unavailable."
+                    break;
+                case error.TIMEOUT:
+                    myApp.loggingReport.innerHTML = "The request to get user location timed out."
+                    break;
+                case error.UNKNOWN_ERROR:
+                    myApp.loggingReport.innerHTML = "An unknown error occurred."
+                    break;
+            }
+
+            logging();
+            setStatus(myApp.gpsStatus, "w3-text-red");
+        }
+
+        function formatErrorMessage(jqXHR) {
+            if (jqXHR.status === 0) {
+                return ('Not connected.\nPlease verify your network connection.');
+            } else if (jqXHR.status === 404) {
+                return ('The requested page not found. [404]');
+            } else if (jqXHR.status === 500) {
+                return ('Internal Server Error [500].');
+            } else {
+                return ('Uncaught Error.\n' + jqXHR.responseText);
+            }
+        }
+
+        function openPref() {
+            if (myApp.loggingButton.innerHTML !== "STOP") {
+                getPref();
+                myApp.sideBar.style.display = "block";
+            }
+        }
+
+        function closePref() {
+            myApp.sideBar.style.display = "none";
+        }
+
+        function saveAndClosePref() {
+            setPref();
+            closePref()
+        }
+
+        function setCookie(cname, cvalue, exdays) {
+            var expires = "";
+            if (exdays > 0) {
+                var d = new Date();
+                d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
+                expires = "expires=" + d.toUTCString() + ";";
+            }
+            document.cookie = cname + "=" + cvalue + ";" + expires + "path=/";
+        }
+
+        function getCookie(cname) {
+            var name = cname + "=";
+            var ca = document.cookie.split(';');
+            for (var i = 0; i < ca.length; i++) {
+                var c = ca[i];
+                while (c.charAt(0) == ' ') {
+                    c = c.substring(1);
+                }
+                if (c.indexOf(name) == 0) {
+                    return c.substring(name.length, c.length);
+                }
+            }
+            return "";
+        }
+
+        function checkCookie(cname) {
+            var tmp = getCookie(cname);
+            return (tmp != "");
+        }
+        getPref();
+    </script>
+</body></html>
